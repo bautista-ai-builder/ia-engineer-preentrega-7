@@ -1,5 +1,6 @@
 """API FastAPI de orquestación con Redis, aprobación y métricas."""
 
+import asyncio
 import logging
 import os
 import secrets
@@ -31,6 +32,14 @@ class ChatRequest(BaseModel):
 class ApprovalRequest(BaseModel):
     thread_id: str = Field(min_length=1, max_length=128)
     approved: bool
+
+
+class ChatResponse(BaseModel):
+    thread_id: str
+    status: str
+    answer: str | None = None
+    pending: dict | None = None
+    route_history: list[str] = Field(default_factory=list)
 
 
 def authenticate(x_api_key: str | None = Header(default=None)) -> None:
@@ -95,15 +104,17 @@ def create_app(*, workflow=None, redis_client=None) -> FastAPI:
     def metrics():
         return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
-    @app.post("/chat", dependencies=[Depends(authenticate)])
-    def chat(body: ChatRequest, request: Request):
+    @app.post("/chat", dependencies=[Depends(authenticate)], response_model=ChatResponse)
+    async def chat(body: ChatRequest, request: Request):
         graph = request.app.state.workflow
         config = {"configurable": {"thread_id": body.thread_id}}
         if graph.get_state(config).next:
             raise HTTPException(409, "Conversación pendiente de aprobación")
         try:
-            result = graph.invoke(
-                {"question": body.message, "require_approval": body.require_approval}, config=config
+            result = await asyncio.to_thread(
+                graph.invoke,
+                {"question": body.message, "require_approval": body.require_approval},
+                config,
             )
         except Exception:
             logger.exception("agent_execution_failed thread_id=%s", body.thread_id)
@@ -121,14 +132,14 @@ def create_app(*, workflow=None, redis_client=None) -> FastAPI:
             "route_history": result.get("route_history", []),
         }
 
-    @app.post("/approve", dependencies=[Depends(authenticate)])
-    def approve(body: ApprovalRequest, request: Request):
+    @app.post("/approve", dependencies=[Depends(authenticate)], response_model=ChatResponse)
+    async def approve(body: ApprovalRequest, request: Request):
         graph = request.app.state.workflow
         config = {"configurable": {"thread_id": body.thread_id}}
         if "gate" not in graph.get_state(config).next:
             raise HTTPException(409, "No hay aprobación pendiente para este thread_id")
         try:
-            result = graph.invoke(Command(resume=body.approved), config=config)
+            result = await asyncio.to_thread(graph.invoke, Command(resume=body.approved), config)
         except Exception:
             logger.exception("approval_failed thread_id=%s", body.thread_id)
             raise HTTPException(503, "No se pudo reanudar la solicitud") from None
