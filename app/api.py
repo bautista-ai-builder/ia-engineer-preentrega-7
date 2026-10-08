@@ -108,7 +108,7 @@ def create_app(*, workflow=None, redis_client=None) -> FastAPI:
     async def chat(body: ChatRequest, request: Request):
         graph = request.app.state.workflow
         config = {"configurable": {"thread_id": body.thread_id}}
-        if graph.get_state(config).next:
+        if (await asyncio.to_thread(graph.get_state, config)).next:
             raise HTTPException(409, "Conversación pendiente de aprobación")
         try:
             result = await asyncio.to_thread(
@@ -136,7 +136,7 @@ def create_app(*, workflow=None, redis_client=None) -> FastAPI:
     async def approve(body: ApprovalRequest, request: Request):
         graph = request.app.state.workflow
         config = {"configurable": {"thread_id": body.thread_id}}
-        if "gate" not in graph.get_state(config).next:
+        if "gate" not in (await asyncio.to_thread(graph.get_state, config)).next:
             raise HTTPException(409, "No hay aprobación pendiente para este thread_id")
         try:
             result = await asyncio.to_thread(graph.invoke, Command(resume=body.approved), config)
