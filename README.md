@@ -23,4 +23,4 @@ Para una solicitud pendiente, enviar `POST /approve` con `{"thread_id":"demo-1",
 - `app/api.py`: autenticación con token, endpoints, errores y métricas.
 - `Dockerfile`, `docker-compose.yml`: API y Redis Stack con volumen persistente.
 
-Las acciones sensibles de este prototipo consisten en responder/analizar; **no ejecutan escrituras externas**. La lista de verbos exige revisión, y el cliente también puede fijar `require_approval`. Para producción real se deben añadir identidad de revisores, control de acceso por usuario, límites de solicitudes, trazas centralizadas y un flujo de acciones auditado. Los tests usan `InMemorySaver` y modelos falsos; no sustituyen una prueba real de Redis/OpenAI.
+Las acciones sensibles de este prototipo consisten en responder/analizar; **no ejecutan escrituras externas**. La lista de verbos exige revisión, y el cliente también puede fijar `require_approval`. Para producción real se deben añadir identidad de revisores, control de acceso por usuario, límites de solicitudes, trazas centralizadas y un flujo de acciones auditado.
